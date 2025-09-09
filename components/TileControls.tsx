@@ -12,13 +12,15 @@ interface TileControlsProps {
   onGenerate: (prompt: string) => Promise<void>;
   onRegenerate: (prompt: string) => Promise<void>;
   onDelete: () => Promise<void>;
+  onUpload?: (file: File) => Promise<void>;
   onRefreshTiles?: () => void;
 }
 
-export default function TileControls({ x, y, z, exists, onGenerate, onRegenerate, onDelete, onRefreshTiles }: TileControlsProps) {
+export default function TileControls({ x, y, z, exists, onGenerate, onRegenerate, onDelete, onUpload, onRefreshTiles }: TileControlsProps) {
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   const handleDelete = async () => {
     setLoading(true);
@@ -32,30 +34,81 @@ export default function TileControls({ x, y, z, exists, onGenerate, onRegenerate
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onUpload) return;
+
+    setUploadLoading(true);
+    try {
+      await onUpload(file);
+      if (onRefreshTiles) {
+        onRefreshTiles();
+      }
+    } catch (error) {
+      console.error("Failed to upload tile:", error);
+    } finally {
+      setUploadLoading(false);
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="flex gap-1">
       <Tooltip.Provider delayDuration={300}>
         {!exists ? (
-          // Generate button for empty tiles
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <button 
-                className="w-7 h-7 rounded border border-emerald-700 bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg" 
-                title="Generate tile"
-                onClick={() => setGenerateModalOpen(true)}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </button>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content className="bg-gray-900 text-white px-2 py-1 rounded text-xs leading-none z-[10002]" sideOffset={5}>
-                Generate new tile
-                <Tooltip.Arrow className="fill-gray-900" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
+          // Generate and Upload buttons for empty tiles
+          <>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button 
+                  className="w-7 h-7 rounded border border-emerald-700 bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg" 
+                  title="Generate tile"
+                  onClick={() => setGenerateModalOpen(true)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content className="bg-gray-900 text-white px-2 py-1 rounded text-xs leading-none z-[10002]" sideOffset={5}>
+                  Generate new tile
+                  <Tooltip.Arrow className="fill-gray-900" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+
+            {onUpload && (
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <label className="w-7 h-7 rounded border border-purple-700 bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={uploadLoading}
+                    />
+                    {uploadLoading ? (
+                      <svg width="16" height="16" viewBox="0 0 16 16" className="animate-spin">
+                        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="37.7" strokeDashoffset="18.8"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 10V2m0 0l3 3m-3-3L5 5M2 14h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </label>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content className="bg-gray-900 text-white px-2 py-1 rounded text-xs leading-none z-[10002]" sideOffset={5}>
+                    Upload base tile (256x256)
+                    <Tooltip.Arrow className="fill-gray-900" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            )}
+          </>
         ) : (
           // Regenerate and Delete buttons for existing tiles
           <>

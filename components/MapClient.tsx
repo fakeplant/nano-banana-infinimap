@@ -130,14 +130,62 @@ export default function MapClient() {
       });
       
       if (response.ok) {
-        await refreshVisibleTiles();
         setTileExists(prev => ({ ...prev, [`${x},${y}`]: false }));
+        // Force refresh of tiles
+        if (map) {
+          const tileLayer = (map as any)._tileLayer;
+          if (tileLayer) {
+            tileLayer.redraw();
+            // Force cache invalidation
+            const ts = Date.now();
+            if (tileLayer.setUrl) {
+              tileLayer.setUrl(`/api/tiles/{z}/{x}/{y}?v=${ts}`);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error("Failed to delete tile:", error);
       throw error;
     }
   }, [map]);
+
+  // Handle tile upload
+  const handleUpload = useCallback(async (x: number, y: number, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('tile', file);
+
+      const response = await fetch(`/api/upload/${MAX_Z}/${x}/${y}`, {
+        method: "POST",
+        body: formData
+      });
+      
+      if (response.ok) {
+        setTileExists(prev => ({ ...prev, [`${x},${y}`]: true }));
+        // Force re-check tile existence to update UI state
+        await checkTileExists(x, y);
+        // Refresh tiles after state update
+        if (map) {
+          const tileLayer = (map as any)._tileLayer;
+          if (tileLayer) {
+            tileLayer.redraw();
+            // Force cache invalidation
+            const ts = Date.now();
+            if (tileLayer.setUrl) {
+              tileLayer.setUrl(`/api/tiles/{z}/{x}/{y}?v=${ts}`);
+            }
+          }
+        }
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error("Failed to upload tile:", error);
+      throw error;
+    }
+  }, [map, checkTileExists]);
 
   // Refresh currently visible tiles with a cache-busting URL template.
   const refreshVisibleTiles = useCallback(async () => {
@@ -450,6 +498,7 @@ export default function MapClient() {
               onGenerate={(prompt) => handleGenerate(selectedTile.x, selectedTile.y, prompt)}
               onRegenerate={(prompt) => handleRegenerate(selectedTile.x, selectedTile.y, prompt)}
               onDelete={() => handleDelete(selectedTile.x, selectedTile.y)}
+              onUpload={(file) => handleUpload(selectedTile.x, selectedTile.y, file)}
               onRefreshTiles={() => {
                 // Delay a moment to ensure filesystem flush and ETag update.
                 setTimeout(() => { 
